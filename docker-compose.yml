@@ -11,6 +11,7 @@ services:
       - app-net
     environment:
       PORT: "9000"
+      DEFAULT_EMPRESA_ID: "${DEFAULT_EMPRESA_ID:-1}"
       AUTH_ADMIN_PASSWORD: "${AUTH_ADMIN_PASSWORD}"
       AUTH_HGVP_PASSWORD: "${AUTH_HGVP_PASSWORD}"
       AUTH_AMAS_PASSWORD: "${AUTH_AMAS_PASSWORD}"

@@ -130,8 +130,6 @@
   document.getElementById("form-individual").addEventListener("submit", enviarIndividual);
   document.getElementById("form-lote").addEventListener("submit", enviarLote);
 
-  updateLoginStatus();
-
   function getToken() {
     return localStorage.getItem(TOKEN_KEY);
   }
@@ -139,10 +137,6 @@
   function authHeaders(extra = {}) {
     const token = getToken();
     return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
-  }
-
-  function updateLoginStatus() {
-    if (getToken()) carregarPreparos();
   }
 
   function showMessage(texto) {
@@ -204,10 +198,6 @@
   async function enviarIndividual(event) {
     event.preventDefault();
     clearMessage();
-    if (!getToken()) {
-      showMessage("Faca login na tela Respostas para enviar.");
-      return;
-    }
     const immediate = event.submitter?.value === "true";
     setButtonsLoading(["btn-individual-imediato"], true);
     setButtonText("btn-individual-imediato", "Enviando...");
@@ -239,10 +229,6 @@
   async function enviarLote(event) {
     event.preventDefault();
     clearMessage();
-    if (!getToken()) {
-      showMessage("Faca login na tela Respostas para enviar lote.");
-      return;
-    }
     const immediate = event.submitter?.value === "true";
     setButtonsLoading(["btn-lote", "btn-lote-imediato"], true);
     setButtonText(immediate ? "btn-lote-imediato" : "btn-lote", immediate ? "Liberando..." : "Agendando...");

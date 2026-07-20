@@ -294,9 +294,9 @@ envioQueue.registerProcessor(async ({ numero, variaveis, empresaId }) => {
   return serializeResultadoEnvio(numero, variaveis, status, retorno);
 });
 
-router.post("/individual", requireAuth, async (req, res, next) => {
+router.post("/individual", async (req, res, next) => {
   try {
-    const empresaId = req.user.empresa_id;
+    const empresaId = Number(process.env.DEFAULT_EMPRESA_ID || 1);
     const numero = normalizarNumero(req.body?.numero);
 
     if (!numero) {
@@ -370,8 +370,9 @@ router.get("/lotes/:id/arquivo", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/lote", requireAuth, upload.single("arquivo"), async (req, res, next) => {
+router.post("/lote", upload.single("arquivo"), async (req, res, next) => {
   try {
+    const empresaId = Number(process.env.DEFAULT_EMPRESA_ID || 1);
     if (!req.file) {
       return res.status(400).json({ error: "Envie um arquivo via campo 'arquivo' (.xlsx, .xls ou .csv)." });
     }
@@ -403,7 +404,7 @@ router.post("/lote", requireAuth, upload.single("arquivo"), async (req, res, nex
     });
     const ignoredRows = rows.length - validRows.length;
     const loteId = await envioQueueRepository.createBatch({
-      empresaId: req.user.empresa_id,
+      empresaId,
       arquivoNome: req.file.originalname || evidenceFilename,
       arquivoPath: evidencePath,
       totalRegistros: rows.length,
@@ -429,7 +430,7 @@ router.post("/lote", requireAuth, upload.single("arquivo"), async (req, res, nex
       }
 
       const immediate = parseImmediateFlag(req.body?.immediate);
-      const job = await envioQueue.enqueue({ numero, variaveis, empresaId: req.user.empresa_id, loteId }, { immediate });
+      const job = await envioQueue.enqueue({ numero, variaveis, empresaId, loteId }, { immediate });
       resultados.push(serializeResultadoAgendado(job, numero, variaveis));
     }
 

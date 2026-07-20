@@ -8,7 +8,7 @@ router.post("/login", (req, res) => {
   const password = String(req.body?.password || "");
   const user = USERS[username];
 
-  if (!user || user.password !== password) {
+  if (!user || !user.password || !password || user.password !== password) {
     return res.status(401).json({ message: "Credenciais invalidas." });
   }
 
