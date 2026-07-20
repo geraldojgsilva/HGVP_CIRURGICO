@@ -214,7 +214,7 @@
       const payload = await response.json();
       renderResultados([payload]);
       if (!response.ok) {
-        showMessage(payload.mensagem || payload.error || "Envio retornou falha.");
+        showMessage(payload.mensagem || payload.message || payload.error || `Envio retornou falha (HTTP ${response.status}).`);
       } else {
         showMessage(payload.mensagem || (immediate ? "Mensagem liberada para envio imediato." : "Mensagem adicionada na fila de envio."));
       }
