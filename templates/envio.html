@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>📤 Envio de Mensagens</h2>
+
+<!-- ================= ENVIO INDIVIDUAL ================= -->
+<section class="card">
+  <h3>Envio Individual</h3>
+
+  <form method="post" action="/enviar_individual" id="form-envio-individual">
+    <div class="grid-2">
+
+      <label>Número:
+        <input
+          id="numero"
+          name="numero"
+          placeholder="11999999999"
+          required
+          pattern="^\d{11}$"
+          title="Informe DDD + número (ex: 11999999999)"
+          inputmode="numeric"
+          maxlength="11"
+          oninput="this.value = this.value.replace(/\D/g,'')"
+        >
+      </label>
+
+      <label>Nome:
+        <input name="nome" placeholder="Nome do paciente">
+      </label>
+
+      <label>Data:
+        <input type="date" name="data">
+      </label>
+
+      <label>Hora:
+        <input type="time" name="hora">
+      </label>
+
+      <label>Unidade:
+        <input name="unidade" placeholder="Unidade / Local">
+      </label>
+
+      <label>Observacao:
+        <input name="observacao" placeholder="Observacoes adicionais">
+      </label>
+
+      <label>Especialidade:
+        <input name="especialidade" placeholder="Especialidade">
+      </label>
+
+      <label>Tipo de internacao:
+        <select name="tipo_internacao" required>
+          <option value="">Selecione</option>
+          <option value="hospital_dia">Hospital Dia</option>
+          <option value="hospital_pernoite">Hospital Pernoite</option>
+        </select>
+      </label>
+
+    </div>
+
+    <div class="actions actions-right">
+      <button class="btn">
+        Enviar
+      </button>
+    </div>
+  </form>
+</section>
+
+<!-- ================= ENVIO EM LOTE ================= -->
+<section class="card" hidden>
+  <h3>Envio em Lote (Excel)</h3>
+
+  <form
+    method="post"
+    action="/enviar_lote"
+    enctype="multipart/form-data"
+    id="form-envio-lote"
+  >
+    <p>
+      Envie um arquivo .xlsx, .xls ou .csv com ao menos a coluna <b>numero</b>.
+      <br>
+      Colunas opcionais (se existirem serão lidas):
+      <br>
+      <code>
+        nome, data, hora, unidade, OBS, especialidade,
+        QTD_PERMITIDA,
+        VALIDACAO_DIGITOS,
+        VALIDACAO_NOME,
+        VALIDACAO_DATAS,
+        VALIDACAO_HORA,
+        VALIDACAO_UNIDADE
+      </code>.
+      <br>
+      <small>O DDI 55 sera adicionado automaticamente.</small>
+    </p>
+
+    <input type="file" name="arquivo" accept=".xlsx,.xls,.csv" required>
+
+    <div class="actions actions-right">
+      <button
+        type="button"
+        class="btn"
+        onclick="window.location.href='/download-modelo-lote'">
+        Baixar Excel
+      </button>
+
+      <button class="btn" id="btn-enviar-lote">
+        Enviar Lote
+      </button>
+    </div>
+  </form>
+</section>
+
+<script>
+  // document
+  //   .getElementById("form-envio-individual")
+  //   .addEventListener("submit", function () {
+  //     const input = document.getElementById("numero");
+  //     if (input && !input.value.startsWith("55")) {
+  //       input.value = "55" + input.value;
+  //     }
+  //   });
+
+  document
+    .getElementById("form-envio-lote")
+    .addEventListener("submit", function () {
+      const btn = document.getElementById("btn-enviar-lote");
+      btn.disabled = true;
+      btn.innerText = "Enviando...";
+    });
+</script>
+
+{% endblock %}

@@ -1,0 +1,22 @@
+{
+  "name": "irssl-chatbot-api",
+  "version": "1.0.0",
+  "description": "Web API Node.js para mensageria, respostas e logs do IRSSL Chatbot.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "check": "node --check src/server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
+    "oracledb": "^6.7.1",
+    "winston": "^3.19.0"
+  }
+}

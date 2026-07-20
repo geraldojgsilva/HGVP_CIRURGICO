@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Relatorio de Erros de Envio</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="container">
+    <h1>ChatBot IRSSL</h1>
+    <nav>
+      <a href="/">Inicio</a>
+      <a href="/envio">Envio</a>
+      <a href="/respostas">Respostas</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+  <h2>Relatorio de Erros de Envio</h2>
+
+  <section class="card">
+    <div class="filter-row">
+      <div class="filter-group">
+        <label for="data_ini">Data inicial</label>
+        <input id="data_ini" type="date">
+      </div>
+
+      <div class="filter-group">
+        <label for="data_fim">Data final</label>
+        <input id="data_fim" type="date">
+      </div>
+
+      <div class="filter-group">
+        <label for="limit">Limite</label>
+        <select id="limit">
+          <option value="50">50</option>
+          <option value="100" selected>100</option>
+          <option value="250">250</option>
+          <option value="500">500</option>
+        </select>
+      </div>
+
+      <button class="btn-search" type="button" id="buscar">Buscar</button>
+    </div>
+
+    <div class="actions actions-right">
+      <a class="btn btn-secondary" href="/envio">Voltar para envio</a>
+    </div>
+  </section>
+
+  <section class="card report-summary" id="resumo" hidden>
+    <h3>Resumo</h3>
+    <div class="summary-grid">
+      <div>
+        <strong id="total-erros">0</strong>
+        <span>Total de falhas</span>
+      </div>
+      <div>
+        <strong id="por-status">-</strong>
+        <span>Status encontrados</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="flash" id="mensagem" hidden></div>
+
+  <section class="table-wrap" id="resultado" hidden>
+    <table class="styled-table">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Numero</th>
+          <th>Status</th>
+          <th>Erro traduzido</th>
+          <th>Erro original</th>
+        </tr>
+      </thead>
+      <tbody id="linhas"></tbody>
+    </table>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="container">IRSSL - ChatBot</div>
+</footer>
+
+<script>
+  const mensagem = document.getElementById("mensagem");
+  const resultado = document.getElementById("resultado");
+  const resumo = document.getElementById("resumo");
+  const linhas = document.getElementById("linhas");
+
+  document.getElementById("buscar").addEventListener("click", carregarErros);
+
+  function showMessage(texto) {
+    mensagem.textContent = texto;
+    mensagem.hidden = false;
+  }
+
+  function clearMessage() {
+    mensagem.textContent = "";
+    mensagem.hidden = true;
+  }
+
+  function formatValue(value) {
+    if (value === null || value === undefined || value === "") return "-";
+    if (typeof value === "object") return JSON.stringify(value, null, 2);
+    return String(value);
+  }
+
+  function escapeHtml(value) {
+    return formatValue(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function formatDate(value) {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short"
+    }).format(date);
+  }
+
+  function buildQuery() {
+    const params = new URLSearchParams();
+    params.set("limit", document.getElementById("limit").value);
+
+    const dataIni = document.getElementById("data_ini").value;
+    const dataFim = document.getElementById("data_fim").value;
+    if (dataIni) params.set("data_ini", dataIni);
+    if (dataFim) params.set("data_fim", dataFim);
+
+    return params.toString();
+  }
+
+  async function carregarErros() {
+    clearMessage();
+    resultado.hidden = true;
+    resumo.hidden = true;
+    linhas.innerHTML = "";
+
+    try {
+      const response = await fetch(`/api/envio/erros?${buildQuery()}`);
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || payload.message || "Falha ao consultar relatorio.");
+      }
+
+      renderResumo(payload.resumo);
+      renderTabela(payload.data || []);
+    } catch (error) {
+      showMessage(error.message);
+    }
+  }
+
+  function renderResumo(data) {
+    const porStatus = Object.entries(data?.por_status || {})
+      .map(([status, total]) => `${status}: ${total}`)
+      .join(" | ");
+
+    document.getElementById("total-erros").textContent = data?.total || 0;
+    document.getElementById("por-status").textContent = porStatus || "-";
+    resumo.hidden = false;
+  }
+
+  function renderTabela(data) {
+    if (!data.length) {
+      showMessage("Nenhum erro de envio encontrado para os filtros selecionados.");
+      return;
+    }
+
+    linhas.innerHTML = data.map((item) => `
+      <tr>
+        <td>${escapeHtml(formatDate(item.data_envio))}</td>
+        <td>${escapeHtml(item.numero)}</td>
+        <td>${escapeHtml(item.status_http)}</td>
+        <td>${escapeHtml(item.erro?.mensagem)}</td>
+        <td><pre class="pre">${escapeHtml(item.erro_original || item.erro?.original || item.erro?.detalhe)}</pre></td>
+      </tr>
+    `).join("");
+
+    resultado.hidden = false;
+  }
+</script>
+</body>
+</html>

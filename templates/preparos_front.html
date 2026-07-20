@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cadastro de Preparos</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="container">
+    <h1>ChatBot IRSSL</h1>
+    <nav>
+      <a href="/">Inicio</a>
+      <a href="/envio">Envio</a>
+      <a href="/respostas">Respostas</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+  <h2>Cadastro de Preparos</h2>
+
+  <section class="card">
+    <h3>Novo preparo</h3>
+    <form id="form-preparo">
+      <input type="hidden" name="id_preparo" id="id_preparo">
+      <div class="grid-2">
+        <label>Nome
+          <input name="nome" id="nome" placeholder="Preparo de cirurgia geral" required>
+        </label>
+        <label>Template
+          <input name="template_name" id="template_name" placeholder="preparo_cirurgia_pdf">
+        </label>
+        <label>Namespace
+          <input name="namespace" id="namespace" placeholder="Namespace aprovado na Positus/Meta">
+        </label>
+        <label>Nome do arquivo
+          <input name="document_filename" id="document_filename" placeholder="preparo-cirurgico.pdf">
+        </label>
+      </div>
+      <label class="full-field">URL do PDF ou link seguro
+        <input name="document_url" id="document_url" placeholder="https://..." required>
+      </label>
+      <label class="full-field">Texto do preparo
+        <textarea name="texto_preparo" id="texto_preparo" maxlength="1000" rows="5" placeholder="Orientacoes do preparo em ate 1000 caracteres"></textarea>
+      </label>
+      <label class="check-row">
+        <input type="checkbox" name="ativo" id="ativo" value="true" checked>
+        Ativo
+      </label>
+      <div class="actions actions-right">
+        <button class="btn btn-secondary" type="button" id="btn-limpar">Limpar</button>
+        <button class="btn" type="submit" id="btn-salvar">Salvar preparo</button>
+      </div>
+    </form>
+  </section>
+
+  <div class="flash" id="mensagem" hidden></div>
+
+  <section class="table-wrap" id="preparos-wrap" hidden>
+    <table class="styled-table queue-table">
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Template</th>
+          <th>Arquivo</th>
+          <th>Texto</th>
+          <th>URL</th>
+          <th>Ativo</th>
+          <th>Acoes</th>
+        </tr>
+      </thead>
+      <tbody id="preparos-linhas"></tbody>
+    </table>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="container">IRSSL - ChatBot</div>
+</footer>
+
+<script>
+  const TOKEN_KEY = "irssl_token";
+  const mensagem = document.getElementById("mensagem");
+  const form = document.getElementById("form-preparo");
+  const linhas = document.getElementById("preparos-linhas");
+  const wrap = document.getElementById("preparos-wrap");
+  let preparos = [];
+
+  document.getElementById("btn-limpar").addEventListener("click", limparFormulario);
+  form.addEventListener("submit", salvarPreparo);
+  carregarPreparos();
+
+  function getToken() {
+    return localStorage.getItem(TOKEN_KEY);
+  }
+
+  function authHeaders(extra = {}) {
+    const token = getToken();
+    return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
+  }
+
+  function showMessage(texto) {
+    mensagem.textContent = texto;
+    mensagem.hidden = false;
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "-")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  async function carregarPreparos() {
+    if (!getToken()) {
+      showMessage("Faca login na tela de envio antes de cadastrar preparos.");
+      return;
+    }
+    try {
+      const response = await fetch("/api/preparos?include_inactive=true", {
+        headers: authHeaders(),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || payload.message || "Falha ao carregar preparos.");
+      preparos = payload.data || [];
+      renderPreparos();
+    } catch (error) {
+      showMessage(error.message);
+    }
+  }
+
+  async function salvarPreparo(event) {
+    event.preventDefault();
+    if (!getToken()) {
+      showMessage("Faca login na tela de envio antes de cadastrar preparos.");
+      return;
+    }
+
+    const id = document.getElementById("id_preparo").value;
+    const data = Object.fromEntries(new FormData(form).entries());
+    data.ativo = document.getElementById("ativo").checked;
+
+    try {
+      const response = await fetch(id ? `/api/preparos/${id}` : "/api/preparos", {
+        method: id ? "PUT" : "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(data),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || payload.message || "Falha ao salvar preparo.");
+      showMessage("Preparo salvo.");
+      limparFormulario();
+      await carregarPreparos();
+    } catch (error) {
+      showMessage(error.message);
+    }
+  }
+
+  async function desativarPreparo(id) {
+    if (!confirm("Desativar este preparo?")) return;
+    try {
+      const response = await fetch(`/api/preparos/${id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || payload.message || "Falha ao desativar preparo.");
+      showMessage("Preparo desativado.");
+      await carregarPreparos();
+    } catch (error) {
+      showMessage(error.message);
+    }
+  }
+
+  function editarPreparo(id) {
+    const preparo = preparos.find((item) => Number(item.id_preparo) === Number(id));
+    if (!preparo) return;
+    document.getElementById("id_preparo").value = preparo.id_preparo;
+    document.getElementById("nome").value = preparo.nome || "";
+    document.getElementById("template_name").value = preparo.template_name || "";
+    document.getElementById("namespace").value = preparo.namespace || "";
+    document.getElementById("document_url").value = preparo.document_url || "";
+    document.getElementById("document_filename").value = preparo.document_filename || "";
+    document.getElementById("texto_preparo").value = preparo.texto_preparo || "";
+    document.getElementById("ativo").checked = Boolean(preparo.ativo);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function limparFormulario() {
+    form.reset();
+    document.getElementById("id_preparo").value = "";
+    document.getElementById("ativo").checked = true;
+  }
+
+  function renderPreparos() {
+    if (!preparos.length) {
+      wrap.hidden = true;
+      showMessage("Nenhum preparo cadastrado.");
+      return;
+    }
+
+    linhas.innerHTML = preparos.map((item) => `
+      <tr class="${item.ativo ? "row-ok" : "row-error"}">
+        <td>${escapeHtml(item.nome)}</td>
+        <td>${escapeHtml(item.template_name)}</td>
+        <td>${escapeHtml(item.document_filename)}</td>
+        <td>${escapeHtml(item.texto_preparo || "-")}</td>
+        <td><a href="${escapeHtml(item.document_url)}" target="_blank" rel="noopener">Abrir</a></td>
+        <td>${item.ativo ? "Sim" : "Nao"}</td>
+        <td>
+          <button class="btn btn-small" type="button" onclick="editarPreparo(${Number(item.id_preparo)})">Editar</button>
+          <button class="btn btn-small btn-secondary" type="button" onclick="desativarPreparo(${Number(item.id_preparo)})">Desativar</button>
+        </td>
+      </tr>
+    `).join("");
+    wrap.hidden = false;
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container" style="max-width: 420px; margin-top: 40px;">
+
+    <h2 class="text-center mb-4">🔐 Login</h2>
+
+    <form method="post" class="card p-4 shadow-sm">
+
+        <div class="mb-3">
+            <label class="form-label">E-mail</label>
+            <input type="email" class="form-control" name="email" required autocomplete="off">
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Senha</label>
+            <div class="input-group">
+                <input 
+                    type="password" 
+                    class="form-control" 
+                    id="senha" 
+                    name="senha" 
+                    required
+                >
+                <button 
+                    class="btn btn-outline-secondary" 
+                    type="button" 
+                    id="toggleSenha"
+                >
+                    👁
+                </button>
+            </div>
+        </div>
+
+        <button class="btn btn-primary w-100" type="submit">Entrar</button>
+
+    </form>
+</div>
+
+<script>
+    // Mostrar / Ocultar senha
+    const senhaInput = document.getElementById("senha");
+    const toggleBtn = document.getElementById("toggleSenha");
+
+    toggleBtn.addEventListener("click", () => {
+        const type = senhaInput.type === "password" ? "text" : "password";
+        senhaInput.type = type;
+        toggleBtn.innerHTML = type === "password" ? "👁" : "🙈";
+    });
+</script>
+
+{% endblock %}

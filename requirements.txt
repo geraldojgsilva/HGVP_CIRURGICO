@@ -1,0 +1,10 @@
+flask
+flask-login
+requests
+pandas
+openpyxl
+jinja2
+python-dotenv
+oracledb
+dotenv
+gunicorn

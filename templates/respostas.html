@@ -1,0 +1,304 @@
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container mt-4">
+  <h2 class="text-center text-primary mb-4">Respostas dos Pacientes</h2>
+
+  <!-- FILTROS -->
+  <div class="card p-3 mb-3">
+    <form method="get">
+      <div class="row g-3 align-items-end">
+
+        <div class="col-auto">
+          <label for="tipo_resposta" class="form-label">Tipo:</label>
+          <select name="tipo_resposta" id="tipo_resposta" class="form-select form-select-sm">
+            <option value="TODOS" {% if tipo=='TODOS' or not tipo %}selected{% endif %}>Todos</option>
+            <option value="CONFIRMADO" {% if tipo=='CONFIRMADO' %}selected{% endif %}>Confirmado</option>
+            <option value="CANCELADO" {% if tipo=='CANCELADO' %}selected{% endif %}>Cancelado</option>
+            <option value="AGUARDANDO" {% if tipo=='AGUARDANDO' %}selected{% endif %}>Aguardando</option>
+          </select>
+        </div>
+
+        <div class="col-auto">
+          <label class="form-label">Data Inicial:</label>
+          <input type="date" name="data_ini" class="form-control form-control-sm" value="{{ data_ini or '' }}">
+        </div>
+
+        <div class="col-auto">
+          <label class="form-label">Data Final:</label>
+          <input type="date" name="data_fim" class="form-control form-control-sm" value="{{ data_fim or '' }}">
+        </div>
+
+        <div class="col-auto">
+          <button type="submit" class="btn btn-primary btn-sm">Buscar</button>
+        </div>
+        
+        <div class="col-auto">
+          <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalRelatorio">
+            Gerar relatório
+          </button>
+        </div>
+
+      </div>
+    </form>
+  </div>
+
+  {% if rows %}
+  <div class="table-responsive">
+    <table class="table table-striped table-bordered table-sm shadow">
+      <thead class="table-primary">
+        <tr>
+          <th>Nome</th>
+          <th>Número</th>
+          <th>Data</th>
+          <th>Hora</th>
+          <th>Unidade</th>
+          <th>Status</th>
+          <th>Data Resposta</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.nome }}</td>
+          <td>{{ r.numero }}</td>
+          <td>{{ r.data_consulta.strftime('%d/%m/%Y') if r.data_consulta else '-' }}</td>
+          <td>
+            {% if r.hora_consulta %}
+            {% if r.hora_consulta.__class__.__name__ == 'timedelta' %}
+            {{ "%02d:%02d"|format(r.hora_consulta.seconds // 3600, (r.hora_consulta.seconds % 3600) // 60) }}
+            {% else %}
+            {{ r.hora_consulta }}
+            {% endif %}
+            {% else %}-{% endif %}
+          </td>
+          <td>{{ r.unidade }}</td>
+          <td>
+            {% if r.resposta == 'CONFIRMADO' %}
+            <span class="badge bg-success">✅ Confirmado</span>
+            {% elif r.resposta == 'CANCELADO' %}
+            <span class="badge bg-danger">❌ Cancelado</span>
+            {% else %}
+            <span class="badge bg-warning text-dark">⏳ Aguardando</span>
+            {% endif %}
+          </td>
+          <td>{{ r.dt_resposta.strftime('%d/%m/%Y') if r.dt_resposta else '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if total_pages > 1 %}
+  <nav aria-label="Page navigation">
+    <ul class="pagination justify-content-center gap-1">
+
+      <!-- Primeira -->
+      <li class="page-item {% if page == 1 %}disabled{% endif %}">
+        <a class="page-link"
+          href="?page=1&tipo_resposta={{ tipo or 'TODOS' }}&data_ini={{ data_ini or '' }}&data_fim={{ data_fim or '' }}">
+          «
+        </a>
+      </li>
+
+      <!-- Anterior -->
+      <li class="page-item {% if page == 1 %}disabled{% endif %}">
+        <a class="page-link"
+          href="?page={{ page - 1 }}&tipo_resposta={{ tipo or 'TODOS' }}&data_ini={{ data_ini or '' }}&data_fim={{ data_fim or '' }}">
+          Anterior
+        </a>
+      </li>
+
+      {% set start = page - 2 %}
+      {% set end = page + 2 %}
+
+      {% if start < 1 %} {% set start=1 %} {% set end=5 %} {% endif %} {% if end> total_pages %}
+        {% set end = total_pages %}
+        {% set start = total_pages - 4 %}
+        {% endif %}
+
+        {% if start < 1 %} {% set start=1 %} {% endif %} <!-- Ellipsis início -->
+          {% if start > 1 %}
+          <li class="page-item disabled">
+            <span class="page-link">…</span>
+          </li>
+          {% endif %}
+
+          <!-- Páginas visíveis -->
+          {% for p in range(start, end + 1) %}
+          {% if p == page %}
+          <li class="page-item active">
+            <span class="page-link">{{ p }}</span>
+          </li>
+          {% else %}
+          <li class="page-item">
+            <a class="page-link"
+              href="?page={{ p }}&tipo_resposta={{ tipo or 'TODOS' }}&data_ini={{ data_ini or '' }}&data_fim={{ data_fim or '' }}">
+              {{ p }}
+            </a>
+          </li>
+          {% endif %}
+          {% endfor %}
+
+          <!-- Ellipsis fim -->
+          {% if end < total_pages %} <li class="page-item disabled">
+            <span class="page-link">…</span>
+            </li>
+            {% endif %}
+
+            <!-- Próxima -->
+            <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+              <a class="page-link"
+                href="?page={{ page + 1 }}&tipo_resposta={{ tipo or 'TODOS' }}&data_ini={{ data_ini or '' }}&data_fim={{ data_fim or '' }}">
+                Próxima
+              </a>
+            </li>
+
+            <!-- Última -->
+            <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+              <a class="page-link"
+                href="?page={{ total_pages }}&tipo_resposta={{ tipo or 'TODOS' }}&data_ini={{ data_ini or '' }}&data_fim={{ data_fim or '' }}">
+                »
+              </a>
+            </li>
+
+    </ul>
+  </nav>
+  {% endif %}
+
+  {% else %}
+  <p class="text-center mt-3">Nenhuma resposta encontrada com os filtros selecionados.</p>
+  {% endif %}
+
+  <div class="modal fade" id="modalRelatorio" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+
+        <div class="modal-header">
+          <h5 class="modal-title">Gerar relatório</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label">Data início</label>
+              <input type="date" class="form-control" id="dataInicio">
+            </div>
+
+            <div class="col-6">
+              <label class="form-label">Data fim</label>
+              <input type="date" class="form-control" id="dataFim">
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">
+            Cancelar
+          </button>
+          <button class="btn btn-success" onclick="exportarRelatorio()">
+            Exportar
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+<!-- MODAL RELATORIO -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+  async function exportarRelatorio() {
+    if (event) event.preventDefault();
+
+    const inicio = document.getElementById('dataInicio').value;
+    const fim = document.getElementById('dataFim').value;
+
+    if (!inicio || !fim) {
+      alert('Preencha as duas datas.');
+      return;
+    }
+
+    if (inicio > fim) {
+      alert('Data início não pode ser maior que a data fim.');
+      return;
+    }
+
+    const dataInicio = parseDateSafe(inicio);
+    const dataFim = parseDateSafe(fim);
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    if (dataInicio > hoje) {
+      alert('Não é permitido selecionar datas futuras.');
+      return;
+    }
+
+    const totalDias = diasEntre(dataInicio, dataFim);
+    if (totalDias > 10) {
+      alert('O intervalo máximo permitido é de 10 dias.');
+      return;
+    }
+
+    const dataInicioFormatada = formatarDataComHora(inicio);
+    const dataFimFormatada = formatarDataComHora(fim, true);
+
+    try {
+      const response = await fetch('/report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          data_ini: dataInicioFormatada,
+          data_fim: dataFimFormatada
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(response.text);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'relatorio.xlsx';
+      a.click();
+
+      const modal = bootstrap.Modal.getInstance(
+        document.getElementById('modalRelatorio')
+      );
+      modal.hide();
+
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao gerar relatório.');
+    }
+  }
+
+  function parseDateSafe(dateStr) {
+    return new Date(dateStr + 'T00:00:00');
+  }
+
+  function diasEntre(inicio, fim) {
+    const msPorDia = 1000 * 60 * 60 * 24;
+    return Math.floor((fim - inicio) / msPorDia) + 1;
+  }
+
+  function formatarDataComHora(data, fim = false) {
+    if (!data) return null;
+
+    return fim
+      ? `${data}T23:59:59`
+      : `${data}T00:00:00`;
+  }
+</script>
+{% endblock %}

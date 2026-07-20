@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Envio de Mensagens</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="container">
+    <h1>ChatBot IRSSL</h1>
+    <nav>
+      <a href="/">Inicio</a>
+      <a href="/envio">Envio</a>
+      <a href="/respostas">Respostas</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+  <h2>Envio de Mensagens</h2>
+
+  <section class="card">
+    <h3>Envio Individual</h3>
+
+    <form id="form-individual">
+      <div class="grid-2">
+        <label>Numero
+          <input id="numero" name="numero" placeholder="11999999999" required inputmode="numeric">
+        </label>
+
+        <label>Nome
+          <input name="nome" placeholder="Nome do paciente">
+        </label>
+
+        <label>Data
+          <input type="date" name="data">
+        </label>
+
+        <label>Hora
+          <input type="time" name="hora">
+        </label>
+
+        <label>Unidade
+          <input name="unidade" placeholder="Unidade / Local">
+        </label>
+
+        <label>Observacao
+          <input name="observacao" placeholder="Observacoes adicionais">
+        </label>
+
+        <label>Especialidade
+          <input name="especialidade" placeholder="Especialidade">
+        </label>
+
+        <label>Template / PDF
+          <select name="tipo_internacao" required>
+            <option value="">Selecione</option>
+            <option value="hospital_dia">Hospital Dia</option>
+            <option value="hospital_pernoite">Hospital Pernoite</option>
+            <option value="confirma_consulta_hgvp">Confirmação de Consulta HGVP</option>
+            <option value="bucomaxilo_hgp">Bucomaxilo HGP</option>
+            <option value="paciente_leito_dia_hgvp">Paciente Leito Dia HGVP</option>
+            <option value="cancelamento_hgvp">Cancelamento HGVP</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="actions actions-right">
+        <button class="btn btn-secondary" type="submit" id="btn-individual-imediato" name="immediate" value="true">Enviar Agora</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card" hidden>
+    <h3>Envio em Lote</h3>
+
+    <form id="form-lote">
+      <input type="file" name="arquivo" accept=".xlsx,.xls,.csv" required>
+
+      <label class="check-row">
+        <input type="checkbox" name="aviso_cirurgico" value="true" class="aviso-cirurgico-toggle">
+        Enviar preparo cirurgico para todos os registros do lote
+      </label>
+      <label class="preparo-select-wrap" hidden>Preparo
+        <select name="preparo_id" class="preparo-select">
+          <option value="">Selecione um preparo cadastrado</option>
+        </select>
+      </label>
+
+      <div class="actions actions-right">
+        <a class="btn btn-secondary" href="/api/envio/modelo-lote">Baixar Excel</a>
+        <button class="btn btn-secondary" type="submit" id="btn-lote-imediato" name="immediate" value="true">Enviar Lote Agora</button>
+        <button class="btn" type="submit" id="btn-lote">Enviar Lote</button>
+      </div>
+    </form>
+  </section>
+
+  <div class="flash" id="mensagem" hidden></div>
+
+  <section class="table-wrap" id="resultado" hidden>
+    <table class="styled-table">
+      <thead>
+        <tr>
+          <th>Numero</th>
+          <th>Nome</th>
+          <th>Status</th>
+          <th>Tipo de internação</th>
+          <th>Mensagem</th>
+          <th>Erro</th>
+          <th>Retorno</th>
+        </tr>
+      </thead>
+      <tbody id="linhas"></tbody>
+    </table>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="container">IRSSL - ChatBot</div>
+</footer>
+
+<script>
+  const TOKEN_KEY = "irssl_token";
+  const mensagem = document.getElementById("mensagem");
+  const resultado = document.getElementById("resultado");
+  const linhas = document.getElementById("linhas");
+
+  document.getElementById("form-individual").addEventListener("submit", enviarIndividual);
+  document.getElementById("form-lote").addEventListener("submit", enviarLote);
+
+  updateLoginStatus();
+
+  function getToken() {
+    return localStorage.getItem(TOKEN_KEY);
+  }
+
+  function authHeaders(extra = {}) {
+    const token = getToken();
+    return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
+  }
+
+  function updateLoginStatus() {
+    if (getToken()) carregarPreparos();
+  }
+
+  function showMessage(texto) {
+    mensagem.textContent = texto;
+    mensagem.hidden = false;
+  }
+
+  function clearMessage() {
+    mensagem.textContent = "";
+    mensagem.hidden = true;
+  }
+
+  function formatValue(value) {
+    if (value === null || value === undefined || value === "") return "-";
+    if (typeof value === "object") return JSON.stringify(value, null, 2);
+    return String(value);
+  }
+
+  function escapeHtml(value) {
+    return formatValue(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  async function carregarPreparos() {
+    if (!getToken()) return;
+    try {
+      const response = await fetch("/api/preparos", { headers: authHeaders() });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || payload.message || "Falha ao carregar preparos.");
+      const preparos = payload.data || [];
+      document.querySelectorAll(".preparo-select").forEach((select) => {
+        const selected = select.value;
+        select.innerHTML = `<option value="">Selecione um preparo cadastrado</option>` +
+          preparos.map((item) =>
+            `<option value="${escapeHtml(item.id_preparo)}">${escapeHtml(item.nome)}</option>`
+          ).join("");
+        select.value = selected;
+      });
+    } catch (error) {
+      showMessage(error.message);
+    }
+  }
+
+  function syncPreparoVisibility() {
+    document.querySelectorAll(".preparo-select-wrap").forEach((wrap) => {
+      const form = wrap.closest("form");
+      const checked = form.querySelector(".aviso-cirurgico-toggle")?.checked;
+      wrap.hidden = !checked;
+      const select = wrap.querySelector("select");
+      select.required = Boolean(checked);
+      if (!checked) select.value = "";
+    });
+  }
+
+  async function enviarIndividual(event) {
+    event.preventDefault();
+    clearMessage();
+    if (!getToken()) {
+      showMessage("Faca login na tela Respostas para enviar.");
+      return;
+    }
+    const immediate = event.submitter?.value === "true";
+    setButtonsLoading(["btn-individual-imediato"], true);
+    setButtonText("btn-individual-imediato", "Enviando...");
+
+    try {
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      if (immediate) data.immediate = "true";
+      const response = await fetch("/api/envio/individual", {
+        method: "POST",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(data)
+      });
+
+      const payload = await response.json();
+      renderResultados([payload]);
+      if (!response.ok) {
+        showMessage(payload.mensagem || payload.error || "Envio retornou falha.");
+      } else {
+        showMessage(payload.mensagem || (immediate ? "Mensagem liberada para envio imediato." : "Mensagem adicionada na fila de envio."));
+      }
+    } catch (error) {
+      showMessage(error.message);
+    } finally {
+      setButtonsLoading(["btn-individual-imediato"], false);
+      setButtonText("btn-individual-imediato", "Enviar Agora");
+    }
+  }
+
+  async function enviarLote(event) {
+    event.preventDefault();
+    clearMessage();
+    if (!getToken()) {
+      showMessage("Faca login na tela Respostas para enviar lote.");
+      return;
+    }
+    const immediate = event.submitter?.value === "true";
+    setButtonsLoading(["btn-lote", "btn-lote-imediato"], true);
+    setButtonText(immediate ? "btn-lote-imediato" : "btn-lote", immediate ? "Liberando..." : "Agendando...");
+
+    try {
+      const formData = new FormData(event.currentTarget);
+      if (immediate) formData.set("immediate", "true");
+      const response = await fetch("/api/envio/lote", {
+        method: "POST",
+        headers: authHeaders(),
+        body: formData
+      });
+
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || payload.message || "Falha no envio em lote.");
+
+      renderResultados(payload.resultados || []);
+      const loteInfo = payload.lote?.id_lote ? ` | Lote: ${payload.lote.id_lote}` : "";
+      const liberadosInfo = payload.resumo.liberados ? ` | Liberados: ${payload.resumo.liberados}` : "";
+      showMessage(`Total: ${payload.resumo.total} | Agendados: ${payload.resumo.agendados || 0}${liberadosInfo} | Enviados: ${payload.resumo.enviados} | Falhas: ${payload.resumo.falhas} | Ignorados: ${payload.resumo.ignorados}${loteInfo}`);
+    } catch (error) {
+      showMessage(error.message);
+    } finally {
+      setButtonsLoading(["btn-lote", "btn-lote-imediato"], false);
+      setButtonText("btn-lote", "Enviar Lote");
+      setButtonText("btn-lote-imediato", "Enviar Lote Agora");
+    }
+  }
+
+  function setButtonText(id, text) {
+    const button = document.getElementById(id);
+    button.textContent = text;
+  }
+
+  function setButtonsLoading(ids, loading) {
+    ids.forEach((id) => {
+      document.getElementById(id).disabled = loading;
+    });
+  }
+
+  function renderResultados(data) {
+    if (!data.length) {
+      resultado.hidden = true;
+      showMessage("Nenhum registro retornado.");
+      return;
+    }
+
+    linhas.innerHTML = data.map((item) => `
+      <tr class="${item.sucesso ? "row-ok" : "row-error"}">
+        <td>${escapeHtml(item.numero)}</td>
+        <td>${escapeHtml(item.nome)}</td>
+        <td>${escapeHtml(item.status)}</td>
+        <td>${escapeHtml(formatTipoInternacao(item.tipo_internacao))}</td>
+        <td>${escapeHtml(item.mensagem)}</td>
+        <td><pre class="pre">${escapeHtml(item.erro)}</pre></td>
+        <td><pre class="pre">${escapeHtml(item.retorno)}</pre></td>
+      </tr>
+    `).join("");
+
+    resultado.hidden = false;
+  }
+
+  function formatTipoInternacao(value) {
+    const labels = {
+      hospital_dia: "Hospital Dia",
+      hospital_pernoite: "Hospital Pernoite",
+      confirma_consulta_hgvp: "Confirmação de Consulta HGVP",
+      bucomaxilo_hgp: "Bucomaxilo HGP",
+      paciente_leito_dia_hgvp: "Paciente Leito Dia HGVP",
+      cancelamento_hgvp: "Cancelamento HGVP"
+    };
+    return labels[value] || value || "-";
+  }
+
+</script>
+</body>
+</html>

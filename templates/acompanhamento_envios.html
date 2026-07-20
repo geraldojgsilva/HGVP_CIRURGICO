@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acompanhamento de Envios</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="container">
+    <h1>ChatBot IRSSL</h1>
+    <nav>
+      <a href="/">Inicio</a>
+      <a href="/envio">Envio</a>
+      <a href="/respostas">Respostas</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+  <h2>Acompanhamento de Envios por Planilha</h2>
+
+  <section class="card auth-card">
+    <h3>Acesso</h3>
+    <form id="form-login" class="filter-row">
+      <div class="filter-group">
+        <label for="username">Usuario</label>
+        <input id="username" name="username" autocomplete="username" value="hgvp">
+      </div>
+
+      <div class="filter-group">
+        <label for="password">Senha</label>
+        <input id="password" name="password" type="password" autocomplete="current-password">
+      </div>
+
+      <button class="btn-search" type="submit" id="btn-login">Entrar</button>
+      <button class="btn-search btn-muted" type="button" id="btn-sair">Sair</button>
+    </form>
+    <p class="muted" id="status-login">Sem token ativo.</p>
+  </section>
+
+  <section class="card">
+    <div class="queue-header">
+      <h3>Planilhas Enviadas</h3>
+      <span class="muted" id="lotes-atualizacao">Aguardando atualizacao.</span>
+    </div>
+
+    <div class="actions actions-right">
+      <button class="btn btn-secondary" type="button" id="btn-atualizar">Atualizar</button>
+      <button class="btn" id="btn-evidencia" type="button" hidden>Baixar Evidencia</button>
+    </div>
+
+    <section class="table-wrap" id="lotes-wrap" hidden>
+      <table class="styled-table queue-table">
+        <thead>
+          <tr>
+            <th>Lote</th>
+            <th>Arquivo</th>
+            <th>Criado em</th>
+            <th>Total</th>
+            <th>Agendados</th>
+            <th>Pendentes</th>
+            <th>Enviados</th>
+            <th>Erros</th>
+          </tr>
+        </thead>
+        <tbody id="lotes-linhas"></tbody>
+      </table>
+    </section>
+  </section>
+
+  <section class="card" id="detalhe-card" hidden>
+    <div class="queue-header">
+      <h3 id="detalhe-titulo">Pacientes do Lote</h3>
+      <span class="muted" id="detalhe-atualizacao">Aguardando atualizacao.</span>
+    </div>
+
+    <div class="queue-summary">
+      <div class="queue-metric metric-pending">
+        <strong id="resumo-pendente">0</strong>
+        <span>Pendente</span>
+      </div>
+      <div class="queue-metric metric-out">
+        <strong id="resumo-enviado">0</strong>
+        <span>Enviado</span>
+      </div>
+      <div class="queue-metric metric-out">
+        <strong id="resumo-respondido">0</strong>
+        <span>Respondido</span>
+      </div>
+      <div class="queue-metric metric-error">
+        <strong id="resumo-erro">0</strong>
+        <span>Erro</span>
+      </div>
+    </div>
+
+    <section class="table-wrap">
+      <table class="styled-table queue-table">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Numero</th>
+            <th>Nome</th>
+            <th>Data</th>
+            <th>Hora</th>
+            <th>Unidade</th>
+            <th>Especialidade</th>
+            <th>Enviado em</th>
+            <th>Resposta</th>
+            <th>Respondido em</th>
+            <th>Mensagem</th>
+          </tr>
+        </thead>
+        <tbody id="pacientes-linhas"></tbody>
+      </table>
+    </section>
+  </section>
+
+  <div class="flash" id="mensagem" hidden></div>
+</main>
+
+<footer class="footer">
+  <div class="container">IRSSL - ChatBot</div>
+</footer>
+
+<script>
+  const TOKEN_KEY = "irssl_token";
+  const POLLING_MS = 10000;
+  const mensagem = document.getElementById("mensagem");
+  const statusLogin = document.getElementById("status-login");
+  const lotesWrap = document.getElementById("lotes-wrap");
+  const lotesLinhas = document.getElementById("lotes-linhas");
+  const lotesAtualizacao = document.getElementById("lotes-atualizacao");
+  const detalheCard = document.getElementById("detalhe-card");
+  const detalheTitulo = document.getElementById("detalhe-titulo");
+  const detalheAtualizacao = document.getElementById("detalhe-atualizacao");
+  const pacientesLinhas = document.getElementById("pacientes-linhas");
+  const btnEvidencia = document.getElementById("btn-evidencia");
+  let loteSelecionado = null;
+  let polling;
+
+  document.getElementById("form-login").addEventListener("submit", login);
+  document.getElementById("btn-sair").addEventListener("click", logout);
+  document.getElementById("btn-atualizar").addEventListener("click", atualizarTudo);
+  btnEvidencia.addEventListener("click", baixarEvidencia);
+
+  updateLoginStatus();
+  atualizarTudo();
+  polling = setInterval(atualizarTudo, POLLING_MS);
+
+  function getToken() {
+    return localStorage.getItem(TOKEN_KEY);
+  }
+
+  function authHeaders(extra = {}) {
+    const token = getToken();
+    return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
+  }
+
+  function updateLoginStatus() {
+    statusLogin.textContent = getToken()
+      ? "Token ativo. O acompanhamento sera atualizado automaticamente."
+      : "Sem token ativo. Informe usuario e senha para acompanhar os lotes.";
+  }
+
+  function showMessage(texto) {
+    mensagem.textContent = texto;
+    mensagem.hidden = false;
+  }
+
+  function clearMessage() {
+    mensagem.textContent = "";
+    mensagem.hidden = true;
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "-")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  async function login(event) {
+    event.preventDefault();
+    clearMessage();
+    const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+
+    try {
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Falha no login.");
+
+      localStorage.setItem(TOKEN_KEY, payload.token);
+      updateLoginStatus();
+      await atualizarTudo();
+    } catch (error) {
+      showMessage(error.message);
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem(TOKEN_KEY);
+    loteSelecionado = null;
+    updateLoginStatus();
+    lotesWrap.hidden = true;
+    detalheCard.hidden = true;
+    btnEvidencia.hidden = true;
+    showMessage("Token removido.");
+  }
+
+  async function atualizarTudo() {
+    if (!getToken()) {
+      lotesAtualizacao.textContent = "Faca login para carregar os lotes.";
+      return;
+    }
+
+    await carregarLotes();
+    if (loteSelecionado) await carregarDetalhe(loteSelecionado);
+  }
+
+  async function carregarLotes() {
+    try {
+      const response = await fetch("/api/envio/lotes", {
+        headers: authHeaders()
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || payload.error || "Falha ao carregar lotes.");
+
+      const lotes = payload.data || [];
+      renderLotes(lotes);
+      if (!loteSelecionado && lotes.length) {
+        await selecionarLote(lotes[0].id_lote);
+      }
+      lotesAtualizacao.textContent = `Atualizado em ${new Date().toLocaleTimeString("pt-BR")}`;
+    } catch (error) {
+      handleError(error, lotesAtualizacao);
+    }
+  }
+
+  async function selecionarLote(idLote) {
+    loteSelecionado = idLote;
+    btnEvidencia.hidden = false;
+    await carregarDetalhe(idLote);
+  }
+
+  async function baixarEvidencia() {
+    if (!loteSelecionado) return;
+
+    try {
+      const response = await fetch(`/api/envio/lotes/${loteSelecionado}/arquivo`, {
+        headers: authHeaders()
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || payload.message || "Falha ao baixar evidencia.");
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const filename = disposition.match(/filename="?([^"]+)"?/i)?.[1] || `lote_${loteSelecionado}.xlsx`;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      showMessage(error.message);
+    }
+  }
+
+  async function carregarDetalhe(idLote) {
+    try {
+      const response = await fetch(`/api/envio/lotes/${idLote}`, {
+        headers: authHeaders()
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || payload.error || "Falha ao carregar lote.");
+
+      detalheTitulo.textContent = `Pacientes do Lote ${payload.lote.id_lote} - ${payload.lote.arquivo_nome}`;
+      renderResumo(payload.resumo || {});
+      renderPacientes(payload.pacientes || []);
+      detalheAtualizacao.textContent = `Atualizado em ${new Date().toLocaleTimeString("pt-BR")}`;
+      detalheCard.hidden = false;
+    } catch (error) {
+      handleError(error, detalheAtualizacao);
+    }
+  }
+
+  function renderLotes(lotes) {
+    if (!lotes.length) {
+      lotesWrap.hidden = true;
+      lotesLinhas.innerHTML = "";
+      return;
+    }
+
+    lotesLinhas.innerHTML = lotes.map((lote) => `
+      <tr class="${lote.id_lote === loteSelecionado ? "row-selected" : ""}" data-lote="${escapeHtml(lote.id_lote)}">
+        <td>${escapeHtml(lote.id_lote)}</td>
+        <td>${escapeHtml(lote.arquivo_nome)}</td>
+        <td>${escapeHtml(formatDateTime(lote.created_at))}</td>
+        <td>${escapeHtml(lote.total_registros)}</td>
+        <td>${escapeHtml(lote.total_agendados)}</td>
+        <td>${escapeHtml(lote.pendentes)}</td>
+        <td>${escapeHtml(lote.enviados)}</td>
+        <td>${escapeHtml(lote.erros)}</td>
+      </tr>
+    `).join("");
+
+    lotesLinhas.querySelectorAll("tr").forEach((row) => {
+      row.addEventListener("click", () => selecionarLote(Number(row.dataset.lote)));
+    });
+    lotesWrap.hidden = false;
+  }
+
+  function renderResumo(resumo) {
+    document.getElementById("resumo-pendente").textContent = resumo.pendente || 0;
+    document.getElementById("resumo-enviado").textContent = resumo.enviado || 0;
+    document.getElementById("resumo-respondido").textContent = resumo.respondido || 0;
+    document.getElementById("resumo-erro").textContent = resumo.erro || 0;
+  }
+
+  function renderPacientes(pacientes) {
+    pacientesLinhas.innerHTML = pacientes.map((item) => `
+      <tr class="${rowClass(item)}">
+        <td>${escapeHtml(statusLabel(item))}</td>
+        <td>${escapeHtml(item.numero)}</td>
+        <td>${escapeHtml(item.nome)}</td>
+        <td>${escapeHtml(formatDateOnly(item.data))}</td>
+        <td>${escapeHtml(item.hora)}</td>
+        <td>${escapeHtml(item.unidade)}</td>
+        <td>${escapeHtml(item.especialidade)}</td>
+        <td>${escapeHtml(formatDateTime(item.dt_envio_banco || item.finished_at))}</td>
+        <td>${escapeHtml(item.resposta)}</td>
+        <td>${escapeHtml(formatDateTime(item.dt_resposta))}</td>
+        <td><pre class="pre">${escapeHtml(item.mensagem || item.erro)}</pre></td>
+      </tr>
+    `).join("");
+  }
+
+  function statusLabel(item) {
+    if (item.status_qualitativo === "respondido") return "Respondido";
+    if (item.status_qualitativo === "enviado") return "Enviado";
+    if (item.status_qualitativo === "erro") return "Erro";
+    if (item.status === "processing") return "Enviando";
+    return "Pendente";
+  }
+
+  function rowClass(item) {
+    if (item.status_qualitativo === "respondido") return "row-answered";
+    if (item.status_qualitativo === "enviado") return "row-ok";
+    if (item.status_qualitativo === "erro" || item.erro) return "row-error";
+    return "row-pending";
+  }
+
+  function handleError(error, target) {
+    if (String(error.message).toLowerCase().includes("token")) {
+      localStorage.removeItem(TOKEN_KEY);
+      updateLoginStatus();
+    }
+    target.textContent = error.message;
+  }
+
+  function formatDateTime(value) {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString("pt-BR");
+  }
+
+  function formatDateOnly(value) {
+    if (!value) return "-";
+    if (/^\d{4}-\d{2}-\d{2}/.test(String(value))) {
+      return new Date(value).toLocaleDateString("pt-BR");
+    }
+    return value;
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>📊 Resultado do Envio</h2>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Numero</th>
+      <th>Nome</th>
+      <th>Data</th>
+      <th>Hora</th>
+      <th>Unidade</th>
+      <th>Observacao</th>
+      <th>Especialidade</th>
+      <th>Status</th>
+      <th>Retorno</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in resultados %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td>{{ r.numero }}</td>
+      <td>{{ r.nome or "" }}</td>
+      <td>{{ r.data or "" }}</td>
+      <td>{{ r.hora or "" }}</td>
+      <td>{{ r.unidade or "" }}</td>
+      <td>{{ r.observacao or "" }}</td>
+      <td>{{ r.especialidade or "" }}</td>
+      <td>{{ r.status }}</td>
+      <td>
+        <pre class="pre">{{ (r.retorno or "")[:500] }}</pre>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<div class="actions">
+  <a class="btn" href="/envio">Voltar</a>
+</div>
+{% endblock %}

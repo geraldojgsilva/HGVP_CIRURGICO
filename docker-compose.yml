@@ -1,0 +1,29 @@
+services:
+  chatbot-api:
+    build: .
+    container_name: irssl_chatbot_api
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    volumes:
+      - ${LOGS_PATH}:/app/logs
+    networks:
+      - app-net
+    environment:
+      PORT: "9000"
+      AUTH_ADMIN_PASSWORD: "${AUTH_ADMIN_PASSWORD}"
+      AUTH_HGVP_PASSWORD: "${AUTH_HGVP_PASSWORD}"
+      AUTH_AMAS_PASSWORD: "${AUTH_AMAS_PASSWORD}"
+      POSITUS_TOKEN: "${POSITUS_TOKEN}"
+      POSITUS_URL: "${POSITUS_URL}"
+      ORACLE_USER: "${ORACLE_USER}"
+      ORACLE_PASS: "${ORACLE_PASS}"
+      ORACLE_HOST: "${ORACLE_HOST}"
+      ORACLE_PORT: "${ORACLE_PORT}"
+      DB_SERVICE: "${DB_SERVICE}"
+      JWT_SECRET: "${JWT_SECRET}"
+      LOG_DIR: "/app/logs"
+
+networks:
+  app-net:
+    external: true

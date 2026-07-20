@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Respostas dos Pacientes</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="container">
+    <h1>ChatBot IRSSL</h1>
+    <nav>
+      <a href="/">Inicio</a>
+      <a href="/envio">Envio</a>
+      <a href="/respostas">Respostas</a>
+    </nav>
+  </div>
+</header>
+
+<main class="container">
+  <h2>Respostas dos Pacientes</h2>
+
+  <section class="card auth-card">
+    <h3>Acesso</h3>
+    <form id="form-login" class="filter-row">
+      <div class="filter-group">
+        <label for="username">Usuario</label>
+        <input id="username" name="username" autocomplete="username" value="hgvp">
+      </div>
+
+      <div class="filter-group">
+        <label for="password">Senha</label>
+        <input id="password" name="password" type="password" autocomplete="current-password">
+      </div>
+
+      <button class="btn-search" type="submit" id="btn-login">Entrar</button>
+      <button class="btn-search btn-muted" type="button" id="btn-sair">Sair</button>
+    </form>
+    <p class="muted" id="status-login">Sem token ativo.</p>
+  </section>
+
+  <section class="card">
+    <div class="filter-row">
+      <div class="filter-group">
+        <label for="tipo_resposta">Status</label>
+        <select id="tipo_resposta" autocomplete="off">
+          <option value="TODOS" selected>Todos os envios</option>
+          <option value="CONFIRMADO">Confirmado</option>
+          <option value="CANCELADO">Cancelado</option>
+          <option value="AGUARDANDO">Aguardando</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="data_ini">Data inicial</label>
+        <input id="data_ini" type="date">
+      </div>
+
+      <div class="filter-group">
+        <label for="data_fim">Data final</label>
+        <input id="data_fim" type="date">
+      </div>
+
+      <div class="filter-group">
+        <label for="data_campo">Filtrar data por</label>
+        <select id="data_campo" autocomplete="off">
+          <option value="envio" selected>Envio</option>
+          <option value="resposta">Resposta</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="numero">Celular opcional</label>
+        <input id="numero" inputmode="numeric" autocomplete="off" placeholder="Buscar celular">
+      </div>
+
+      <div class="filter-group">
+        <label for="per_page">Por pagina</label>
+        <select id="per_page">
+          <option value="10" selected>10</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+
+      <button class="btn-search" type="button" id="buscar">Buscar</button>
+    </div>
+
+    <div class="actions actions-right">
+      <button class="btn btn-secondary" type="button" id="anterior">Anterior</button>
+      <span class="page-status" id="pagina">Pagina 1 de 1</span>
+      <button class="btn btn-secondary" type="button" id="proxima">Proxima</button>
+      <button class="btn" type="button" id="exportar">Exportar Excel</button>
+    </div>
+  </section>
+
+  <div class="flash" id="mensagem" hidden></div>
+
+  <section class="table-wrap" id="resultado" hidden>
+    <table class="styled-table">
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Numero</th>
+          <th>Data</th>
+          <th>Hora</th>
+          <th>Unidade</th>
+          <th>Status</th>
+          <th>Data Envio</th>
+          <th>Data Resposta</th>
+        </tr>
+      </thead>
+      <tbody id="linhas"></tbody>
+    </table>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="container">IRSSL - ChatBot</div>
+</footer>
+
+<script>
+  const TOKEN_KEY = "irssl_token";
+  const mensagem = document.getElementById("mensagem");
+  const resultado = document.getElementById("resultado");
+  const linhas = document.getElementById("linhas");
+  const pagina = document.getElementById("pagina");
+  const statusLogin = document.getElementById("status-login");
+  const authCard = document.querySelector(".auth-card");
+  let currentPage = 1;
+  let totalPages = 1;
+
+  document.getElementById("form-login").addEventListener("submit", login);
+  document.getElementById("btn-sair").addEventListener("click", logout);
+  document.getElementById("buscar").addEventListener("click", () => carregarRespostas(1));
+  document.getElementById("anterior").addEventListener("click", () => carregarRespostas(currentPage - 1));
+  document.getElementById("proxima").addEventListener("click", () => carregarRespostas(currentPage + 1));
+  document.getElementById("exportar").addEventListener("click", exportarExcel);
+
+  resetDefaultFilters();
+  updateLoginStatus();
+  if (getToken()) carregarRespostas(1);
+
+  function getToken() {
+    return localStorage.getItem(TOKEN_KEY);
+  }
+
+  function resetDefaultFilters() {
+    document.getElementById("tipo_resposta").value = "TODOS";
+    document.getElementById("data_campo").value = "envio";
+    document.getElementById("numero").value = "";
+  }
+
+  function updateLoginStatus() {
+    const hasToken = Boolean(getToken());
+    authCard.hidden = hasToken;
+    statusLogin.textContent = hasToken
+      ? "Token ativo. As consultas ja podem ser carregadas."
+      : "Sem token ativo. Informe usuario e senha para consultar.";
+  }
+
+  function showMessage(texto) {
+    mensagem.textContent = texto;
+    mensagem.hidden = false;
+  }
+
+  function clearMessage() {
+    mensagem.textContent = "";
+    mensagem.hidden = true;
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "-")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function statusLabel(item) {
+    if (item.RESPOSTA === "CONFIRMADO") return "Confirmado pelo paciente";
+    if (item.RESPOSTA === "CANCELADO") return "Cancelado pelo paciente";
+    if (item.STATUS_ENVIO === "S") return "Enviado, aguardando resposta";
+    if (item.STATUS_ENVIO === "N") return "Falha no envio";
+    return "Aguardando envio";
+  }
+
+  function buildQuery(page) {
+    const params = new URLSearchParams();
+    params.set("page", page);
+    params.set("_ts", Date.now());
+    params.set("per_page", document.getElementById("per_page").value);
+    params.set("tipo_resposta", document.getElementById("tipo_resposta").value);
+    params.set("data_campo", document.getElementById("data_campo").value);
+
+    const dataIni = document.getElementById("data_ini").value;
+    const dataFim = document.getElementById("data_fim").value;
+    const numero = document.getElementById("numero").value.replace(/\D/g, "");
+    if (dataIni) params.set("data_ini", dataIni);
+    if (dataFim) params.set("data_fim", dataFim);
+    if (numero) params.set("numero", numero);
+
+    return params.toString();
+  }
+
+  function getFilterState() {
+    return {
+      dataIni: document.getElementById("data_ini").value,
+      dataFim: document.getElementById("data_fim").value,
+      numero: document.getElementById("numero").value.replace(/\D/g, ""),
+      dataCampo: document.getElementById("data_campo").value
+    };
+  }
+
+  async function login(event) {
+    event.preventDefault();
+    clearMessage();
+    const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+
+    try {
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Falha no login.");
+
+      localStorage.setItem(TOKEN_KEY, payload.token);
+      updateLoginStatus();
+      showMessage("Login realizado.");
+      await carregarRespostas(1);
+    } catch (error) {
+      showMessage(error.message);
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem(TOKEN_KEY);
+    updateLoginStatus();
+    linhas.innerHTML = "";
+    resultado.hidden = true;
+    showMessage("Token removido.");
+  }
+
+  async function carregarRespostas(page) {
+    clearMessage();
+    const token = getToken();
+    if (!token) {
+      showMessage("Faca login para consultar as respostas.");
+      return;
+    }
+
+    const targetPage = Math.min(Math.max(page, 1), totalPages);
+    try {
+      const response = await fetch(`/api/respostas?${buildQuery(targetPage)}`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || payload.error || "Falha ao consultar respostas.");
+
+      currentPage = payload.pagination.page;
+      totalPages = payload.pagination.total_pages;
+      renderTabela(payload.data || []);
+      renderPaginacao(payload.pagination);
+    } catch (error) {
+      if (String(error.message).toLowerCase().includes("token")) {
+        localStorage.removeItem(TOKEN_KEY);
+        updateLoginStatus();
+      }
+      linhas.innerHTML = "";
+      resultado.hidden = true;
+      const message = error.message === "Failed to fetch"
+        ? "Nao consegui conectar na API. Confirme se o servidor foi iniciado com npm.cmd start."
+        : error.message;
+      showMessage(message);
+    }
+  }
+
+  function renderTabela(data) {
+    if (!data.length) {
+      resultado.hidden = true;
+      const filters = getFilterState();
+      const periodo = filters.dataIni || filters.dataFim
+        ? ` no periodo ${filters.dataIni || "..."} a ${filters.dataFim || "..."}`
+        : "";
+      const campoData = filters.dataCampo === "resposta" ? "data de resposta" : "data de envio";
+      const numero = filters.numero ? ` para o celular ${filters.numero}` : "";
+      const dica = filters.numero ? " Remova o celular para ver todos os envios do periodo." : "";
+      showMessage(`Nenhum envio encontrado por ${campoData}${periodo}${numero}.${dica}`);
+      return;
+    }
+
+    linhas.innerHTML = data.map((item) => `
+      <tr>
+        <td>${escapeHtml(item.NOME)}</td>
+        <td>${escapeHtml(item.NUMERO)}</td>
+        <td>${escapeHtml(item.DATA_CONSULTA)}</td>
+        <td>${escapeHtml(item.HORA_CONSULTA)}</td>
+        <td>${escapeHtml(item.UNIDADE)}</td>
+        <td>${escapeHtml(statusLabel(item))}</td>
+        <td>${escapeHtml(item.DT_ENVIO)}</td>
+        <td>${escapeHtml(item.DT_RESPOSTA)}</td>
+      </tr>
+    `).join("");
+
+    resultado.hidden = false;
+  }
+
+  function renderPaginacao(data) {
+    pagina.textContent = `Pagina ${data.page} de ${data.total_pages} (${data.total} registros)`;
+    document.getElementById("anterior").disabled = data.page <= 1;
+    document.getElementById("proxima").disabled = data.page >= data.total_pages;
+  }
+
+  async function exportarExcel() {
+    clearMessage();
+    const token = getToken();
+    if (!token) {
+      showMessage("Faca login para exportar.");
+      return;
+    }
+
+    const dataIni = document.getElementById("data_ini").value;
+    const dataFim = document.getElementById("data_fim").value;
+    if (!dataIni || !dataFim) {
+      showMessage("Informe data inicial e data final para exportar.");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/respostas/report", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          data_ini: `${dataIni}T00:00:00`,
+          data_fim: `${dataFim}T23:59:59`
+        })
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || payload.message || "Falha ao exportar relatorio.");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "respostas.xlsx";
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      showMessage(error.message);
+    }
+  }
+</script>
+</body>
+</html>
