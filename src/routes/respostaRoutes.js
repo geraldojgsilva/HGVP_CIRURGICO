@@ -1,7 +1,7 @@
 const express = require("express");
 const { execute, getConnection, oracledb } = require("../services/oracleService");
 const { generateAutomationItemsExcel } = require("../services/reportService");
-const { requireAuth } = require("../middleware/auth");
+const { requireAuth, requireAuthOrHgvp } = require("../middleware/auth");
 const { serializeOracleRow } = require("../utils/envioUtils");
 const logger = require("../services/logger");
 
@@ -97,7 +97,7 @@ async function sincronizarWebhooksRecentes(empresaId, numeroFiltro) {
   }
 }
 
-router.get("/", requireAuth, async (req, res, next) => {
+router.get("/", requireAuthOrHgvp, async (req, res, next) => {
   try {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     res.setHeader("Pragma", "no-cache");
@@ -293,7 +293,7 @@ router.get("/analytics", requireAuth, async (req, res, next) => {
   }
 });
 
-router.post("/report", requireAuth, async (req, res, next) => {
+router.post("/report", requireAuthOrHgvp, async (req, res, next) => {
   try {
     const dataIni = parseIsoDate(req.body?.data_ini, "data_ini");
     const dataFim = parseIsoDate(req.body?.data_fim, "data_fim");

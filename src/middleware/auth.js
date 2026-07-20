@@ -73,6 +73,16 @@ function requireAuth(req, res, next) {
   }
 }
 
+function requireAuthOrHgvp(req, res, next) {
+  const authHeader = req.headers.authorization || "";
+  if (!authHeader) {
+    req.user = publicUser(USERS.hgvp);
+    return next();
+  }
+
+  return requireAuth(req, res, next);
+}
+
 function requireAdmin(req, res, next) {
   if (!req.user?.isAdmin) {
     return res.status(403).json({ message: "Acesso restrito a administradores." });
@@ -80,4 +90,4 @@ function requireAdmin(req, res, next) {
   return next();
 }
 
-module.exports = { USERS, makeToken, publicUser, requireAuth, requireAdmin };
+module.exports = { USERS, makeToken, publicUser, requireAuth, requireAuthOrHgvp, requireAdmin };
